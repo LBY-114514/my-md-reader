@@ -1,6 +1,5 @@
 """Markdown 文件阅读器 — 后端文件操作模块。"""
 
-import os
 from pathlib import Path
 
 
@@ -18,7 +17,7 @@ def read_file(path: str) -> str:
         UnicodeDecodeError: 编码错误（非 UTF-8 文件）
     """
     file_path = Path(path)
-    if not file_path.exists():
+    if not file_path.is_file():
         raise FileNotFoundError(f"文件不存在: {path}")
     return file_path.read_text(encoding="utf-8")
 
@@ -38,10 +37,10 @@ def scan_folder(path: str) -> list[dict]:
 
     files = []
     for entry in sorted(folder.iterdir(), key=lambda e: e.name.lower()):
-        if entry.is_file() and entry.suffix.lower() == ".md":
+        if entry.is_file() and is_markdown_file(entry.name):
             files.append({
                 "name": entry.name,
-                "path": str(entry.resolve()),
+                "path": str(entry),
                 "size": entry.stat().st_size,
             })
     return files
