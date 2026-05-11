@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown Reader</title>
+<link rel="stylesheet" href="libs/github.min.css">
+<style>
+  /* === 全局 === */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --color-bg: #ffffff;
+    --color-text: #1f2328;
+    --color-text-secondary: #656d76;
+    --color-border: #d0d7de;
+    --color-sidebar-bg: #f6f8fa;
+    --color-code-bg: #f6f8fa;
+    --color-accent: #0969da;
+    --max-content-width: 900px;
+    --sidebar-width: 260px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+      Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--color-text);
+    background: var(--color-bg);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* === 侧边栏 === */
+  #sidebar {
+    width: var(--sidebar-width);
+    min-width: 200px;
+    max-width: 400px;
+    background: var(--color-sidebar-bg);
+    border-right: 1px solid var(--color-border);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    resize: horizontal;
+  }
+
+  #sidebar.visible { display: flex; }
+
+  #sidebar-header {
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  #sidebar-header button {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 2px 8px;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+  }
+
+  #sidebar-header button:hover { background: #eaeef2; }
+
+  #file-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px 0;
+  }
+
+  #file-list li {
+    padding: 6px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #file-list li:hover { background: #eaeef2; }
+  #file-list li.active {
+    background: #ddf4ff;
+    color: var(--color-accent);
+    font-weight: 500;
+  }
+
+  /* === 主内容区 === */
+  #main {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* === 拖拽区域 === */
+  #drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: var(--color-text-secondary);
+    border: 2px dashed var(--color-border);
+    border-radius: 12px;
+    margin: 40px;
+    transition: border-color 0.2s, background 0.2s;
+    cursor: pointer;
+    min-height: 300px;
+  }
+
+  #drop-zone.drag-over {
+    border-color: var(--color-accent);
+    background: #ddf4ff;
+  }
+
+  #drop-zone .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.6; }
+  #drop-zone .title { font-size: 20px; font-weight: 500; margin-bottom: 8px; }
+  #drop-zone .subtitle { font-size: 14px; }
+
+  /* === 内容容器 === */
+  #content {
+    max-width: var(--max-content-width);
+    margin: 0 auto;
+    padding: 32px 48px;
+    width: 100%;
+    display: none;
+  }
+
+  #content.visible { display: block; }
+
+  /* === Markdown 内容样式（参考 GitHub） === */
+  .markdown-body { font-size: 16px; }
+
+  .markdown-body h1, .markdown-body h2, .markdown-body h3,
+  .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+    position: relative;
+  }
+
+  .markdown-body h1 {
+    font-size: 2em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .markdown-body h2 {
+    font-size: 1.5em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .markdown-body h3 { font-size: 1.25em; }
+  .markdown-body h4 { font-size: 1em; }
+
+  .markdown-body p { margin-bottom: 16px; }
+
+  .markdown-body a { color: var(--color-accent); text-decoration: none; }
+  .markdown-body a:hover { text-decoration: underline; }
+
+  .markdown-body ul, .markdown-body ol { margin-bottom: 16px; padding-left: 2em; }
+  .markdown-body li { margin-bottom: 4px; }
+
+  .markdown-body blockquote {
+    padding: 0 1em;
+    color: var(--color-text-secondary);
+    border-left: 0.25em solid var(--color-border);
+    margin-bottom: 16px;
+  }
+
+  .markdown-body table {
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    width: 100%;
+  }
+  .markdown-body th, .markdown-body td {
+    padding: 6px 13px;
+    border: 1px solid var(--color-border);
+  }
+  .markdown-body th { font-weight: 600; background: var(--color-sidebar-bg); }
+
+  .markdown-body hr {
+    border: 0;
+    height: 0.25em;
+    background: var(--color-border);
+    margin: 24px 0;
+  }
+
+  /* 代码块（未高亮时的基础样式） */
+  .markdown-body code {
+    background: var(--color-code-bg);
+    border-radius: 6px;
+    padding: 0.2em 0.4em;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+    font-size: 85%;
+  }
+
+  .markdown-body pre {
+    background: var(--color-code-bg);
+    border-radius: 6px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .markdown-body pre code {
+    background: none;
+    padding: 0;
+    font-size: 85%;
+    line-height: 1.45;
+  }
+
+  /* === 复制按钮 === */
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 12px;
+    font-size: 12px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .markdown-body pre:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { background: #eaeef2; }
+  .copy-btn.copied { color: #1a7f37; border-color: #1a7f37; }
+
+  /* === 标题锚点 === */
+  .anchor-link {
+    position: absolute;
+    left: -24px;
+    top: 0;
+    opacity: 0;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 0.85em;
+    padding: 0 4px;
+    transition: opacity 0.15s;
+  }
+
+  .markdown-body h1:hover .anchor-link,
+  .markdown-body h2:hover .anchor-link,
+  .markdown-body h3:hover .anchor-link,
+  .markdown-body h4:hover .anchor-link,
+  .markdown-body h5:hover .anchor-link,
+  .markdown-body h6:hover .anchor-link { opacity: 1; }
+
+  /* === 响应式 === */
+  @media (max-width: 768px) {
+    #content { padding: 16px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 侧边栏 -->
+<nav id="sidebar">
+  <div id="sidebar-header">
+    <span id="sidebar-title">文件列表</span>
+    <button id="sidebar-toggle" title="收起侧边栏">&lt;</button>
+  </div>
+  <ul id="file-list"></ul>
+</nav>
+
+<!-- 主内容区 -->
+<main id="main">
+  <!-- 拖拽区域 -->
+  <div id="drop-zone">
+    <div class="icon">📄</div>
+    <div class="title">打开 Markdown 文件</div>
+    <div class="subtitle">拖拽 .md 文件到此处，或点击选择文件</div>
+  </div>
+
+  <!-- 内容容器 -->
+  <div id="content" class="markdown-body"></div>
+</main>
+
+<script src="libs/marked.min.js"></script>
+<script src="libs/highlight.min.js"></script>
+</body>
+</html>
