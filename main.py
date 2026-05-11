@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import webview
+from webview.menu import Menu, MenuAction, MenuSeparator
 
 from backend import read_file, scan_folder
 
@@ -145,19 +146,19 @@ def main():
 
     # 构建菜单
     menu_items = [
-        webview.Menu(
+        Menu(
             '文件',
             [
-                webview.MenuAction('打开文件', lambda: on_open_file(api, window)),
-                webview.MenuAction('打开文件夹', lambda: on_open_folder(api, window)),
-                webview.MenuSeparator(),
-                webview.MenuAction('退出', lambda: window.destroy()),
+                MenuAction('打开文件', lambda: on_open_file(api, window)),
+                MenuAction('打开文件夹', lambda: on_open_folder(api, window)),
+                MenuSeparator(),
+                MenuAction('退出', lambda: window.destroy()),
             ],
         ),
-        webview.Menu(
+        Menu(
             '视图',
             [
-                webview.MenuAction('切换侧边栏', lambda: on_toggle_sidebar(window)),
+                MenuAction('切换侧边栏', lambda: on_toggle_sidebar(window)),
             ],
         ),
     ]
