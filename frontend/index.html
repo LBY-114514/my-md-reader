@@ -316,6 +316,7 @@ marked.setOptions({
 let currentFilePath = null;
 let currentFolderPath = null;
 let fileListData = [];
+let dragActive = false;
 
 // === 渲染 Markdown ===
 function renderMarkdown(markdownText) {
@@ -323,10 +324,18 @@ function renderMarkdown(markdownText) {
   contentEl.innerHTML = html;
 
   // 给标题加锚点
+  const usedIds = new Set();
   contentEl.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
     if (!heading.id) {
-      heading.id = generateId(heading.textContent);
+      let baseId = generateId(heading.textContent);
+      let id = baseId;
+      let counter = 1;
+      while (usedIds.has(id)) {
+        id = baseId + '-' + (++counter);
+      }
+      heading.id = id;
     }
+    usedIds.add(heading.id);
     const anchor = document.createElement('a');
     anchor.className = 'anchor-link';
     anchor.href = '#' + heading.id;
@@ -336,7 +345,6 @@ function renderMarkdown(markdownText) {
 
   // 给代码块加复制按钮
   contentEl.querySelectorAll('pre').forEach(pre => {
-    if (pre.querySelector('.copy-btn')) return;
     const btn = document.createElement('button');
     btn.className = 'copy-btn';
     btn.textContent = '复制';
@@ -372,9 +380,12 @@ function renderMarkdown(markdownText) {
 }
 
 function generateId(text) {
-  return text.toLowerCase().trim()
+  const id = text.toLowerCase().trim()
     .replace(/[^\w一-鿿\s-]/g, '')
-    .replace(/\s+/g, '-');
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return id || 'section';
 }
 
 // === DOM 引用 ===
@@ -447,18 +458,23 @@ function openFileFromList(index) {
 dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
   e.stopPropagation();
+  dragActive = true;
   dropZone.classList.add('drag-over');
 });
 
 dropZone.addEventListener('dragleave', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  dropZone.classList.remove('drag-over');
+  if (!e.relatedTarget || !dropZone.contains(e.relatedTarget)) {
+    dragActive = false;
+    dropZone.classList.remove('drag-over');
+  }
 });
 
 dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
   e.stopPropagation();
+  dragActive = false;
   dropZone.classList.remove('drag-over');
 
   const files = e.dataTransfer.files;
@@ -478,11 +494,18 @@ dropZone.addEventListener('drop', (e) => {
     renderMarkdown(ev.target.result);
     sidebar.classList.remove('visible');
   };
+  reader.onerror = function() {
+    alert('读取文件失败，请检查文件是否可访问');
+  };
   reader.readAsText(file, 'UTF-8');
 });
 
 // === 点击拖拽区 → 通过 Python 打开文件对话框 ===
 dropZone.addEventListener('click', () => {
+  if (dragActive) {
+    dragActive = false;
+    return;
+  }
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.open_file_dialog().then(result => {
       if (!result) return; // 用户取消
