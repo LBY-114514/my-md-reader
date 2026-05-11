@@ -5,7 +5,7 @@ import sys
 import json
 import webview
 
-from backend import read_file, scan_folder, is_markdown_file
+from backend import read_file, scan_folder
 
 
 def get_frontend_path():
@@ -80,26 +80,47 @@ class MarkdownReaderApi:
             return json.dumps({"ok": False, "error": str(e)})
 
 
+def _show_error(window, msg):
+    """在前端显示错误提示。"""
+    window.evaluate_js(f"alert({json.dumps(msg, ensure_ascii=False)})")
+
+
 def on_open_file(api, window):
     """菜单：打开文件。"""
     result = api.open_file_dialog()
-    if result:
+    if not result:
+        return
+    try:
         data = json.loads(result)
-        if data.get("ok"):
-            window.evaluate_js(
-                f"loadFileContent({json.dumps(data['path'])}, {json.dumps(data['content'])})"
-            )
+    except json.JSONDecodeError:
+        _show_error(window, "打开文件失败：返回数据异常")
+        return
+    if data.get("ok"):
+        window.evaluate_js(
+            f"loadFileContent({json.dumps(data['path'], ensure_ascii=False)},"
+            f" {json.dumps(data['content'], ensure_ascii=False)})"
+        )
+    else:
+        _show_error(window, data.get("error", "打开文件失败"))
 
 
 def on_open_folder(api, window):
     """菜单：打开文件夹。"""
     result = api.open_folder_dialog()
-    if result:
+    if not result:
+        return
+    try:
         data = json.loads(result)
-        if data.get("ok"):
-            window.evaluate_js(
-                f"loadFolder({json.dumps(data['files'])}, {json.dumps(data['folder'])})"
-            )
+    except json.JSONDecodeError:
+        _show_error(window, "打开文件夹失败：返回数据异常")
+        return
+    if data.get("ok"):
+        window.evaluate_js(
+            f"loadFolder({json.dumps(data['files'], ensure_ascii=False)},"
+            f" {json.dumps(data['folder'], ensure_ascii=False)})"
+        )
+    else:
+        _show_error(window, data.get("error", "打开文件夹失败"))
 
 
 def on_toggle_sidebar(window):
