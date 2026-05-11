@@ -440,6 +440,10 @@ function openFileFromList(index) {
   // 调用 Python 后端读取文件
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.read_file(file.path).then(content => {
+      if (content.startsWith('__ERROR__:')) {
+        alert('读取文件失败: ' + content.substring(10));
+        return;
+      }
       currentFilePath = file.path;
       showDropZone(false);
       showContent(true);
@@ -545,6 +549,10 @@ function showWelcome() {
   showDropZone(true);
   currentFilePath = null;
   sidebar.classList.remove('visible');
+}
+
+function toggleSidebar() {
+  sidebar.classList.toggle('visible');
 }
 </script>
 </body>

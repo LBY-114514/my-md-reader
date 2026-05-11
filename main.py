@@ -125,9 +125,7 @@ def on_open_folder(api, window):
 
 def on_toggle_sidebar(window):
     """菜单：切换侧边栏。"""
-    window.evaluate_js(
-        "document.getElementById('sidebar').classList.toggle('visible')"
-    )
+    window.evaluate_js("toggleSidebar()")
 
 
 def main():
