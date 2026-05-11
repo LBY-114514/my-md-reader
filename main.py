@@ -42,7 +42,7 @@ class MarkdownReaderApi:
             return json.dumps({"ok": False, "error": str(e)})
 
     def open_file_dialog(self) -> str:
-        """打开系统文件选择对话框，读取文件并返回内容。"""
+        """打开系统文件选择对话框。"""
         file_types = ('Markdown 文件 (*.md)',)
         result = self._window.create_file_dialog(
             webview.OPEN_DIALOG, file_types=file_types
@@ -63,7 +63,7 @@ class MarkdownReaderApi:
             return json.dumps({"ok": False, "error": str(e)})
 
     def open_folder_dialog(self) -> str:
-        """打开系统文件夹选择对话框，扫描并返回 .md 文件列表。"""
+        """打开系统文件夹选择对话框。"""
         result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
         if not result:
             return ""
@@ -78,6 +78,35 @@ class MarkdownReaderApi:
             })
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
+
+
+def on_open_file(api, window):
+    """菜单：打开文件。"""
+    result = api.open_file_dialog()
+    if result:
+        data = json.loads(result)
+        if data.get("ok"):
+            window.evaluate_js(
+                f"loadFileContent({json.dumps(data['path'])}, {json.dumps(data['content'])})"
+            )
+
+
+def on_open_folder(api, window):
+    """菜单：打开文件夹。"""
+    result = api.open_folder_dialog()
+    if result:
+        data = json.loads(result)
+        if data.get("ok"):
+            window.evaluate_js(
+                f"loadFolder({json.dumps(data['files'])}, {json.dumps(data['folder'])})"
+            )
+
+
+def on_toggle_sidebar(window):
+    """菜单：切换侧边栏。"""
+    window.evaluate_js(
+        "document.getElementById('sidebar').classList.toggle('visible')"
+    )
 
 
 def main():
@@ -95,7 +124,26 @@ def main():
     )
     api.set_window(window)
 
-    webview.start()
+    # 构建菜单
+    menu_items = [
+        webview.Menu(
+            '文件',
+            [
+                webview.MenuAction('打开文件', lambda: on_open_file(api, window)),
+                webview.MenuAction('打开文件夹', lambda: on_open_folder(api, window)),
+                webview.MenuSeparator(),
+                webview.MenuAction('退出', lambda: window.destroy()),
+            ],
+        ),
+        webview.Menu(
+            '视图',
+            [
+                webview.MenuAction('切换侧边栏', lambda: on_toggle_sidebar(window)),
+            ],
+        ),
+    ]
+
+    webview.start(menu=menu_items)
 
 
 if __name__ == '__main__':
