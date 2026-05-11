@@ -294,5 +294,235 @@
 
 <script src="libs/marked.min.js"></script>
 <script src="libs/highlight.min.js"></script>
+<script>
+// === Markdown 渲染配置 ===
+marked.setOptions({
+  gfm: true,
+  breaks: false,
+  highlight: function(code, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return hljs.highlight(code, { language: lang }).value;
+      } catch (_) {}
+    }
+    try {
+      return hljs.highlightAuto(code).value;
+    } catch (_) {}
+    return code;
+  }
+});
+
+// === 状态 ===
+let currentFilePath = null;
+let currentFolderPath = null;
+let fileListData = [];
+
+// === 渲染 Markdown ===
+function renderMarkdown(markdownText) {
+  const html = marked.parse(markdownText);
+  contentEl.innerHTML = html;
+
+  // 给标题加锚点
+  contentEl.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
+    if (!heading.id) {
+      heading.id = generateId(heading.textContent);
+    }
+    const anchor = document.createElement('a');
+    anchor.className = 'anchor-link';
+    anchor.href = '#' + heading.id;
+    anchor.textContent = '#';
+    heading.appendChild(anchor);
+  });
+
+  // 给代码块加复制按钮
+  contentEl.querySelectorAll('pre').forEach(pre => {
+    if (pre.querySelector('.copy-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = '复制';
+    btn.addEventListener('click', function() {
+      const code = pre.querySelector('code') || pre;
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = '已复制 ✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = '复制';
+          btn.classList.remove('copied');
+        }, 2000);
+      }).catch(() => {
+        // fallback: 使用 execCommand
+        const textarea = document.createElement('textarea');
+        textarea.value = code.textContent;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        btn.textContent = '已复制 ✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = '复制';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    });
+    pre.appendChild(btn);
+  });
+}
+
+function generateId(text) {
+  return text.toLowerCase().trim()
+    .replace(/[^\w一-鿿\s-]/g, '')
+    .replace(/\s+/g, '-');
+}
+
+// === DOM 引用 ===
+const dropZone = document.getElementById('drop-zone');
+const contentEl = document.getElementById('content');
+const sidebar = document.getElementById('sidebar');
+const fileList = document.getElementById('file-list');
+const sidebarTitle = document.getElementById('sidebar-title');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+
+// === 显示/隐藏拖拽区 ===
+function showDropZone(show) {
+  dropZone.style.display = show ? 'flex' : 'none';
+  if (show) {
+    contentEl.classList.remove('visible');
+    contentEl.innerHTML = '';
+  }
+}
+
+function showContent(show) {
+  if (show) {
+    contentEl.classList.add('visible');
+  } else {
+    contentEl.classList.remove('visible');
+    contentEl.innerHTML = '';
+  }
+}
+
+// === 侧边栏 ===
+sidebarToggle.addEventListener('click', () => {
+  sidebar.classList.remove('visible');
+});
+
+function showSidebar(files, folderPath) {
+  currentFolderPath = folderPath;
+  fileListData = files;
+  sidebarTitle.textContent = folderPath.split(/[/\\]/).pop() || '文件列表';
+  sidebar.classList.add('visible');
+  fileList.innerHTML = '';
+  files.forEach((file, index) => {
+    const li = document.createElement('li');
+    li.textContent = file.name;
+    li.title = file.path;
+    li.addEventListener('click', () => openFileFromList(index));
+    fileList.appendChild(li);
+  });
+}
+
+function openFileFromList(index) {
+  const file = fileListData[index];
+  if (!file) return;
+  // 调用 Python 后端读取文件
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.read_file(file.path).then(content => {
+      currentFilePath = file.path;
+      showDropZone(false);
+      showContent(true);
+      renderMarkdown(content);
+      // 高亮当前项
+      document.querySelectorAll('#file-list li').forEach((li, i) => {
+        li.classList.toggle('active', i === index);
+      });
+    }).catch(err => {
+      alert('读取文件失败: ' + err);
+    });
+  }
+}
+
+// === 拖拽处理 ===
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dropZone.classList.remove('drag-over');
+
+  const files = e.dataTransfer.files;
+  if (files.length === 0) return;
+
+  const file = files[0];
+  if (!file.name.toLowerCase().endsWith('.md')) {
+    alert('仅支持 .md 文件');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    currentFilePath = file.name;
+    showDropZone(false);
+    showContent(true);
+    renderMarkdown(ev.target.result);
+    sidebar.classList.remove('visible');
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+// === 点击拖拽区 → 通过 Python 打开文件对话框 ===
+dropZone.addEventListener('click', () => {
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.open_file_dialog().then(result => {
+      if (!result) return; // 用户取消
+      const data = JSON.parse(result);
+      if (!data.ok) return;
+      currentFilePath = data.path;
+      showDropZone(false);
+      showContent(true);
+      renderMarkdown(data.content);
+      sidebar.classList.remove('visible');
+    }).catch(err => {
+      console.error('打开文件失败:', err);
+    });
+  }
+});
+
+// === 暴露给 Python 调用的函数 ===
+function loadFileContent(filePath, content) {
+  currentFilePath = filePath;
+  showDropZone(false);
+  showContent(true);
+  renderMarkdown(content);
+}
+
+function loadFolder(fileList, folderPath) {
+  showDropZone(false);
+  showSidebar(fileList, folderPath);
+  if (fileList.length > 0) {
+    openFileFromList(0);
+  } else {
+    showContent(true);
+    contentEl.innerHTML = '<p style="text-align:center;color:#656d76;padding:48px;">该文件夹中没有 .md 文件</p>';
+  }
+}
+
+function showWelcome() {
+  showDropZone(true);
+  currentFilePath = null;
+  sidebar.classList.remove('visible');
+}
+</script>
 </body>
 </html>
