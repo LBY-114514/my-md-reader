@@ -532,14 +532,20 @@ function loadFileContent(filePath, content) {
   showDropZone(false);
   showContent(true);
   renderMarkdown(content);
+  // 侧边栏高亮匹配文件
+  if (fileListData.length > 0) {
+    document.querySelectorAll('#file-list li').forEach((li, i) => {
+      li.classList.toggle('active', fileListData[i] && fileListData[i].path === filePath);
+    });
+  }
 }
 
-function loadFolder(fileList, folderPath) {
+function loadFolder(fileList, folderPath, autoOpen) {
   showDropZone(false);
   showSidebar(fileList, folderPath);
-  if (fileList.length > 0) {
+  if (autoOpen !== false && fileList.length > 0) {
     openFileFromList(0);
-  } else {
+  } else if (fileList.length === 0) {
     showContent(true);
     contentEl.innerHTML = '<p style="text-align:center;color:#656d76;padding:48px;">该文件夹中没有 .md 文件</p>';
   }

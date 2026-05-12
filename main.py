@@ -130,6 +130,11 @@ def on_toggle_sidebar(window):
 
 
 def main():
+    # 检查命令行参数：是否通过"打开方式"传入文件路径
+    startup_file = sys.argv[1] if len(sys.argv) > 1 else None
+    if startup_file and not os.path.isfile(startup_file):
+        startup_file = None
+
     api = MarkdownReaderApi()
     frontend_dir = get_frontend_path()
     index_path = os.path.join(frontend_dir, 'index.html')
@@ -162,6 +167,30 @@ def main():
             ],
         ),
     ]
+
+    # 如果有启动文件，页面加载完成后自动打开
+    if startup_file:
+        def _open_startup_file():
+            path = os.path.abspath(startup_file)
+            try:
+                content = read_file(path)
+                # 先加载同文件夹的 .md 文件列表到侧边栏（不自动打开第一个）
+                folder = os.path.dirname(path)
+                files = scan_folder(folder)
+                if len(files) > 1:
+                    window.evaluate_js(
+                        f"loadFolder({json.dumps(files, ensure_ascii=False)},"
+                        f" {json.dumps(folder, ensure_ascii=False)}, false)"
+                    )
+                # 再加载目标文件（会后执行，正确高亮侧边栏）
+                window.evaluate_js(
+                    f"loadFileContent({json.dumps(path, ensure_ascii=False)},"
+                    f" {json.dumps(content, ensure_ascii=False)})"
+                )
+            except Exception as e:
+                _show_error(window, f"打开文件失败: {e}")
+
+        window.events.loaded += _open_startup_file
 
     webview.start(menu=menu_items)
 
